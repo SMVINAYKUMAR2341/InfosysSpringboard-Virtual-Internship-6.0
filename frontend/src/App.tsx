@@ -5,6 +5,7 @@ import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Dashboard from "./pages/Dashboard";
+import { AIChatbot } from "./components/AIChatbot";
 
 const queryClient = new QueryClient();
 
@@ -19,6 +20,8 @@ const App = () => (
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
         <Route path="*" element={<NotFound />} />
       </Routes>
+      {/* Global AI Chatbot - appears on all pages */}
+      <AIChatbot />
     </BrowserRouter>
   </QueryClientProvider>
 );

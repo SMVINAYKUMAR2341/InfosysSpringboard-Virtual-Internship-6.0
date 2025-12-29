@@ -64,27 +64,30 @@ class CreditScoreEstimator:
         if employment == 'Employed':
             score += 30
         elif employment == 'Self-Employed':
-            score += 15
+            # Reduced boost for self-employed (higher risk)
+            score += 5  
         else:
             score -= 40
         
-        # Job tenure (+/- 25)
+        # Job tenure (+/- 40) - Stricter penalties for stability
         job_tenure = profile.get('job_tenure', 0)
         if job_tenure >= 5:
             score += 25
         elif job_tenure >= 2:
             score += 10
         elif job_tenure < 1:
-            score -= 15
+            score -= 40  # Massive penalty for new jobs/business
+        elif job_tenure < 2:
+            score -= 20  # Significant penalty for < 2 years
         
-        # Experience (+/- 20)
+        # Experience (+/- 30)
         experience = profile.get('experience', 0)
         if experience >= 10:
             score += 20
         elif experience >= 5:
             score += 10
         elif experience < 2:
-            score -= 10
+            score -= 30  # Stricter penalty for low experience
         
         # Home ownership (+/- 15)
         home_status = profile.get('home_ownership_status', '')
@@ -117,7 +120,28 @@ class CreditScoreEstimator:
 
 
 class InterestRateCalculator:
-    """Calculates interest rate based on risk profile"""
+    """
+    Calculates interest rate based on RBI guidelines and risk profile.
+    
+    RBI Reference Rates (Dec 2024):
+    - RBI Repo Rate: 6.50%
+    - MCLR (1-year): ~9.00-9.50%
+    - Personal Loan Base: 10.50% - 14.00%
+    - Personal Loan Range: 10.50% - 24.00% (for high risk)
+    
+    Banks typically price personal loans as:
+    Base Rate = Repo Rate (6.50%) + MCLR Spread (3.50%) = 10.00%
+    Final Rate = Base Rate + Risk Premium
+    """
+    
+    # RBI Repo Rate as of December 2024
+    RBI_REPO_RATE = 6.50
+    
+    # Bank's internal spread over repo rate (typical: 3-4%)
+    BANK_SPREAD = 3.50
+    
+    # Base lending rate for personal loans
+    BASE_RATE = RBI_REPO_RATE + BANK_SPREAD  # 10.00%
     
     @staticmethod
     def calculate(
@@ -127,57 +151,58 @@ class InterestRateCalculator:
         loan_duration: int
     ) -> float:
         """
-        Returns interest rate per annum (9-20%)
-        Based on ML risk score, credit band, employment stability
+        Returns interest rate per annum based on RBI guidelines.
+        
+        Rate Structure (as per typical Indian bank personal loans):
+        - Excellent (750+): 10.50% - 12.00%
+        - Good (700-749): 12.00% - 14.00%
+        - Fair (650-699): 14.00% - 16.00%
+        - Poor (600-649): 16.00% - 18.00%
+        - Very Poor (<600): Not typically approved, but 18.00% if approved
         """
-        base_rate = 10.0  # RBI repo rate assumption
+        base_rate = InterestRateCalculator.BASE_RATE  # 10.00%
         
-        # Risk premium based on approval probability
-        if approval_probability >= 0.85:
-            risk_premium = 0.0
-        elif approval_probability >= 0.75:
-            risk_premium = 1.5
-        elif approval_probability >= 0.65:
-            risk_premium = 3.0
-        elif approval_probability >= 0.50:
-            risk_premium = 5.0
-        else:
-            risk_premium = 8.0
-        
-        # Credit score adjustment
+        # Credit score is the primary factor for interest rate
         avg_credit = (credit_score_band[0] + credit_score_band[1]) / 2
-        if avg_credit >= 750:
-            credit_adj = -1.0
-        elif avg_credit >= 700:
-            credit_adj = 0.0
-        elif avg_credit >= 650:
-            credit_adj = 1.0
-        elif avg_credit >= 600:
-            credit_adj = 2.5
-        else:
-            credit_adj = 4.0
+        credit_rating = credit_score_band[2]
+        
+        # Risk premium based on credit score (RBI compliant ranges)
+        if avg_credit >= 800:  # Excellent Plus
+            risk_premium = 0.50  # Final: 10.50%
+        elif avg_credit >= 750:  # Excellent
+            risk_premium = 1.50  # Final: 11.50%
+        elif avg_credit >= 700:  # Good
+            risk_premium = 3.00  # Final: 13.00%
+        elif avg_credit >= 650:  # Fair
+            risk_premium = 5.00  # Final: 15.00%
+        elif avg_credit >= 600:  # Poor
+            risk_premium = 7.00  # Final: 17.00%
+        else:  # Very Poor
+            risk_premium = 8.00  # Final: 18.00%
         
         # Employment stability adjustment
+        # Salaried employees get slight discount, self-employed slight premium
         if employment_status == 'Employed':
-            emp_adj = -0.5
+            emp_adj = -0.25  # Salaried discount
         elif employment_status == 'Self-Employed':
-            emp_adj = 0.5
+            emp_adj = 0.50   # Self-employed premium
         else:
-            emp_adj = 2.0
+            emp_adj = 1.00   # Unemployed high risk
         
-        # Tenure adjustment (longer = slightly higher)
-        if loan_duration > 240:  # > 20 years
-            tenure_adj = 0.5
-        elif loan_duration > 120:  # > 10 years
+        # Tenure adjustment (longer loans = slightly higher risk for bank)
+        if loan_duration > 180:  # > 15 years
+            tenure_adj = 0.50
+        elif loan_duration > 84:  # > 7 years
             tenure_adj = 0.25
         else:
             tenure_adj = 0.0
         
         # Calculate final rate
-        final_rate = base_rate + risk_premium + credit_adj + emp_adj + tenure_adj
+        final_rate = base_rate + risk_premium + emp_adj + tenure_adj
         
-        # Clamp to valid range
-        return max(9.0, min(20.0, final_rate))
+        # Clamp to RBI permissible range for personal loans
+        # Min: 10.50% (best case), Max: 18.00% (high risk but approved)
+        return round(max(10.50, min(18.00, final_rate)), 2)
 
 
 class EMICalculator:
@@ -262,33 +287,81 @@ class CoApplicantEvaluator:
 
 
 class DecisionEngine:
-    """Final decision logic combining ML + bank rules"""
+    """Final decision logic combining ML + bank rules - Realistic bank manager criteria"""
     
     @staticmethod
     def decide(
         approval_probability: float,
         emi_to_income_ratio: float,
         credit_rating: str,
-        loan_duration: int
+        loan_duration: int,
+        loan_to_income_ratio: float = 0,
+        profile: dict = None
     ) -> Tuple[str, str]:
         """
         Returns: (decision, reason)
         
         Decisions: APPROVED, REJECTED, PENDING_REVIEW
+        
+        Realistic Bank Manager Criteria:
+        - EMI > 50% → REJECTED (RBI guideline)
+        - EMI > 30% → PENDING_REVIEW (bank risk policy)
+        - Self-employed < 2 years → PENDING_REVIEW
+        - Job tenure < 1 year → PENDING_REVIEW
+        - Fair/Poor credit + EMI > 25% → PENDING_REVIEW
         """
-        # Hard rejection rules
+        profile = profile or {}
+        
+        # Extract profile data for decision rules
+        employment_status = profile.get('employment_status', 'Employed')
+        job_tenure = profile.get('job_tenure', 5)
+        experience = profile.get('experience', 5)
+        
+        # === HARD REJECTION RULES (These are absolute) ===
+        
+        # Rule 1: EMI exceeds 50% of income (RBI guideline)
         if emi_to_income_ratio > 0.50:
             return ("REJECTED", f"EMI exceeds 50% of monthly income ({emi_to_income_ratio:.1%}). Bank policy prohibits approval.")
         
+        # Rule 2: Loan amount too high relative to income
+        if loan_to_income_ratio > 5:
+            return ("REJECTED", f"Loan amount is {loan_to_income_ratio:.1f}x your annual income. Maximum allowed is 5x annual income.")
+        
+        # Rule 3: Very poor credit with long tenure
         if credit_rating == "Very Poor" and loan_duration > 180:
             return ("REJECTED", "High risk profile with long tenure is not permitted.")
         
+        # === PENDING_REVIEW RULES (Practical Bank Manager Criteria) ===
+        # These run BEFORE ML rejection to give borderline cases a chance at manual review
+        
+        # Rule 4: Self-employed with limited business history
+        if employment_status == 'Self-Employed':
+            if job_tenure < 2 or experience < 2:
+                return ("PENDING_REVIEW", "Self-employed applicants with less than 2 years of business history require additional documentation and review.")
+        
+        # Rule 5: New employee - less than 1 year at current job
+        if employment_status == 'Employed' and job_tenure < 1:
+            return ("PENDING_REVIEW", "New employees (less than 1 year at current job) require additional employment verification.")
+        
+        # Rule 6: High EMI burden (30-50% of income) - needs manual review
+        if emi_to_income_ratio > 0.30:
+            return ("PENDING_REVIEW", f"EMI is {emi_to_income_ratio:.1%} of your income. This is on the higher side and requires additional verification by a loan officer.")
+        
+        # Rule 7: Fair/Poor credit with moderate EMI
+        if credit_rating in ["Fair", "Poor"] and emi_to_income_ratio > 0.25:
+            return ("PENDING_REVIEW", f"Your credit rating ({credit_rating}) combined with EMI of {emi_to_income_ratio:.1%} requires additional review.")
+        
+        # Rule 8: High leverage loan (4-5x annual income)
+        if loan_to_income_ratio > 4:
+            return ("PENDING_REVIEW", f"Loan amount is {loan_to_income_ratio:.1f}x your annual income. A loan officer will verify your repayment capacity.")
+        
+        # === ML-BASED FINAL DECISION ===
+        
+        # Now apply ML-based rejection for profiles without specific flags
         if approval_probability < 0.15:
             return ("REJECTED", "Application does not meet minimum eligibility criteria based on financial profile.")
         
-        # ML-based decisions (thresholds adjusted for model trained on imbalanced data)
-        # Model outputs 20-30% for good applicants due to 76% rejection rate in training data
-        if approval_probability >= 0.25:
+        if approval_probability >= 0.40:
             return ("APPROVED", "Congratulations! Your application meets all eligibility criteria.")
         elif approval_probability >= 0.20:
             return ("PENDING_REVIEW", "Your application requires additional review by a loan officer. We will contact you within 2-3 business days.")
@@ -300,26 +373,28 @@ class SHAPExplainer:
     """Generates human-readable explanations for loan decisions"""
     
     @staticmethod
-    def explain(profile: Dict[str, Any], approval_probability: float) -> List[Dict[str, str]]:
+    def explain(profile: Dict[str, Any], approval_probability: float) -> List[Dict[str, Any]]:
         """
         Generates top factors affecting the decision
-        Returns list of {factor, impact, description}
+        Returns list of {factor, impact, description, shap_value}
         """
         factors = []
         
-        # Income analysis
+        # Income analysis - assign synthetic SHAP values based on importance
         monthly_income = profile.get('monthly_income', 0)
         if monthly_income >= 75000:
             factors.append({
                 "factor": "Strong Income",
                 "impact": "positive",
-                "description": f"Monthly income of ₹{monthly_income:,.0f} demonstrates strong repayment capacity"
+                "description": f"Monthly income of ₹{monthly_income:,.0f} demonstrates strong repayment capacity",
+                "shap_value": 0.35
             })
         elif monthly_income < 25000:
             factors.append({
                 "factor": "Limited Income",
                 "impact": "negative",
-                "description": f"Monthly income of ₹{monthly_income:,.0f} may limit loan eligibility"
+                "description": f"Monthly income of ₹{monthly_income:,.0f} may limit loan eligibility",
+                "shap_value": 0.30
             })
         
         # DTI analysis
@@ -328,13 +403,15 @@ class SHAPExplainer:
             factors.append({
                 "factor": "Low Debt Burden",
                 "impact": "positive",
-                "description": f"Debt-to-income ratio of {dti:.1%} indicates healthy financial management"
+                "description": f"Debt-to-income ratio of {dti:.1%} indicates healthy financial management",
+                "shap_value": 0.25
             })
         elif dti > 0.40:
             factors.append({
                 "factor": "High Debt Burden",
                 "impact": "negative",
-                "description": f"Debt-to-income ratio of {dti:.1%} exceeds recommended threshold"
+                "description": f"Debt-to-income ratio of {dti:.1%} exceeds recommended threshold",
+                "shap_value": 0.28
             })
         
         # Employment
@@ -344,30 +421,34 @@ class SHAPExplainer:
             factors.append({
                 "factor": "Stable Employment",
                 "impact": "positive",
-                "description": f"Employed with {job_tenure} years at current job shows stability"
+                "description": f"Employed with {job_tenure} years at current job shows stability",
+                "shap_value": 0.20
             })
         elif employment == 'Unemployed':
             factors.append({
                 "factor": "Employment Status",
                 "impact": "negative",
-                "description": "Currently not employed - income verification required"
+                "description": "Currently not employed - income verification required",
+                "shap_value": 0.45
             })
         
         # Loan amount vs income
         loan_amount = profile.get('loan_amount', 0)
         annual_income = profile.get('annual_income', 1)
-        loan_ratio = loan_amount / annual_income
+        loan_ratio = loan_amount / annual_income if annual_income > 0 else 10
         if loan_ratio < 3:
             factors.append({
                 "factor": "Conservative Loan Request",
                 "impact": "positive",
-                "description": f"Loan amount is {loan_ratio:.1f}x annual income - within safe limits"
+                "description": f"Loan amount is {loan_ratio:.1f}x annual income - within safe limits",
+                "shap_value": 0.18
             })
         elif loan_ratio > 6:
             factors.append({
                 "factor": "High Loan Amount",
                 "impact": "negative",
-                "description": f"Loan amount is {loan_ratio:.1f}x annual income - above recommended limits"
+                "description": f"Loan amount is {loan_ratio:.1f}x annual income - above recommended limits",
+                "shap_value": 0.22
             })
         
         # Home ownership
@@ -376,7 +457,8 @@ class SHAPExplainer:
             factors.append({
                 "factor": "Property Owner",
                 "impact": "positive",
-                "description": "Home ownership provides collateral security"
+                "description": "Home ownership provides collateral security",
+                "shap_value": 0.15
             })
         
         # Education
@@ -385,7 +467,8 @@ class SHAPExplainer:
             factors.append({
                 "factor": "Educational Background",
                 "impact": "positive",
-                "description": f"{education} qualification indicates career growth potential"
+                "description": f"{education} qualification indicates career growth potential",
+                "shap_value": 0.12
             })
         
         # Dependents
@@ -394,7 +477,8 @@ class SHAPExplainer:
             factors.append({
                 "factor": "High Dependents",
                 "impact": "negative",
-                "description": f"{dependents} dependents increase monthly financial obligations"
+                "description": f"{dependents} dependents increase monthly financial obligations",
+                "shap_value": 0.10
             })
         
         return factors[:6]  # Return top 6 factors
@@ -551,27 +635,51 @@ class LoanAdvisor:
             approval_probability = min(approval_probability * 1.15, 0.95)  # Boost with co-applicant
         
         # 7. Final decision
+        # Calculate loan-to-income ratio for decision
+        loan_to_income_ratio = loan_amount / annual_income if annual_income > 0 else 10
+        
         decision, decision_reason = self.decision_engine.decide(
             approval_probability,
             emi_to_income,
             credit_rating,
-            loan_duration
+            loan_duration,
+            loan_to_income_ratio,
+            profile  # Pass profile for employment/tenure checks
         )
         
         # 8. SHAP explanations (REAL from TreeExplainer)
         explanations = self._get_real_shap_explanations(profile)
         
         # Build response
-        # Scale the ML probability for display (ML outputs 15-30%, scale to 40-95%)
-        # Formula: display = 40 + (raw - 0.15) * (95 - 40) / (0.35 - 0.15)
+        # Calculate approval score that ACTUALLY reflects the decision
+        # The score must account for bank policy violations, not just ML probability
         raw_prob = approval_probability
+        
+        # Start with ML-based score scaling
         if raw_prob >= 0.35:
-            display_score = 95.0
+            base_display_score = 95.0
         elif raw_prob <= 0.10:
-            display_score = 30.0
+            base_display_score = 30.0
         else:
             # Linear scaling from [0.10, 0.35] to [30, 95]
-            display_score = 30 + (raw_prob - 0.10) * (95 - 30) / (0.35 - 0.10)
+            base_display_score = 30 + (raw_prob - 0.10) * (95 - 30) / (0.35 - 0.10)
+        
+        # CRITICAL: Adjust score based on bank policy violations
+        # If EMI exceeds 50% of income, this is a hard rejection - score should reflect it
+        if emi_to_income > 0.50:
+            # Score penalty based on how much EMI exceeds the 50% threshold
+            # EMI at 100% of income = ~20% score, EMI at 50% = 50% score
+            emi_penalty = (emi_to_income - 0.50) * 100  # Each 1% over threshold = 1 point penalty
+            display_score = max(10.0, min(45.0, 50.0 - emi_penalty))
+        elif decision == "REJECTED":
+            # Other rejection reasons - cap score at 40%
+            display_score = min(40.0, base_display_score)
+        elif decision == "PENDING_REVIEW":
+            # Pending review - cap score at 65%
+            display_score = min(65.0, base_display_score)
+        else:
+            # Approved - use the full scaled score
+            display_score = base_display_score
         
         return {
             "application_date": application_date,
@@ -669,8 +777,33 @@ class LoanAdvisor:
             loan_amount = profile.get('loan_amount', 0) / 1000
             loan_term = profile.get('loan_duration', 60) * 6  # 60 months = 360 days term
             
-            # Credit history: 1.0 for good, 0.0 for bad
-            credit_history = 1.0 if profile.get('employment_status') != 'Unemployed' else 0.0
+            # Credit history: Calculate based on ACTUAL risk factors, not just employment
+            # This is critical for realistic decisions
+            credit_history = 1.0  # Start with good credit
+            
+            # Risk factor 1: Loan-to-Income ratio
+            annual_income = monthly_income * 12
+            lti_ratio = profile.get('loan_amount', 0) / annual_income if annual_income > 0 else 10
+            if lti_ratio > 5:
+                credit_history = 0.0  # Very risky - loan is 5x+ annual income
+            elif lti_ratio > 4:
+                credit_history = 0.3  # High risk
+            elif lti_ratio > 3:
+                credit_history = 0.6  # Moderate risk
+            
+            # Risk factor 2: Employment stability
+            job_tenure = profile.get('job_tenure', 0)
+            experience = profile.get('experience', 0)
+            if profile.get('employment_status') == 'Unemployed':
+                credit_history = 0.0  # No income source
+            elif profile.get('employment_status') == 'Self-Employed':
+                if job_tenure < 2 or experience < 2:
+                    credit_history = min(credit_history, 0.5)  # Self-employed with short tenure is risky
+            
+            # Risk factor 3: Education + Experience mismatch
+            if profile.get('education_level') in ['High School', 'Not Graduate']:
+                if monthly_income > 50000:  # Unlikely scenario
+                    credit_history = min(credit_history, 0.7)
             
             property_area = property_map.get(profile.get('property_area', 'Urban'), 'Urban')
             
@@ -769,7 +902,11 @@ class LoanAdvisor:
             feature_importance = []
             for idx, feat_name in enumerate(self.feature_names):
                 shap_val = shap_vals[idx]
-                if abs(shap_val) > 0.01:  # Only significant features
+                
+                # Check for significance (relaxed threshold)
+                is_significant = abs(shap_val) > 0.0001
+                
+                if is_significant:
                     # Clean up feature name for display
                     display_name = feat_name.replace('_', ' ').replace('  ', ' ')
                     if '_' in feat_name:
@@ -788,25 +925,38 @@ class LoanAdvisor:
             # Sort by absolute SHAP value (most important first)
             feature_importance.sort(key=lambda x: abs(x['_shap_value']), reverse=True)
             
+            # If nothing passed threshold (rare), take top 5 anyway based on raw magnitude
+            if not feature_importance:
+                top_indices = sorted(range(len(shap_vals)), key=lambda i: abs(shap_vals[i]), reverse=True)[:5]
+                for idx in top_indices:
+                     feature_importance.append({
+                        "factor": self.feature_names[idx],
+                        "impact": "positive" if shap_vals[idx] > 0 else "negative",
+                        "description": "Contributing factor",
+                        "_shap_value": shap_vals[idx]
+                    })
+
+            
             # Print SHAP analysis
             print("\n" + "="*70)
             print("📊 REAL SHAP FEATURE IMPORTANCE")
             print("="*70)
             for i, feat in enumerate(feature_importance[:8], 1):
                 sign = "+" if feat['impact'] == 'positive' else "-"
-                print(f"   {i}. {feat['factor']}: {sign}{abs(feat['_shap_value']):.4f}")
+                print(f"   {i}. {feat['factor']}: {sign}{abs(feat['_shap_value']):.6f}")
             print("="*70 + "\n")
             
-            # Remove internal _shap_value before returning (API expects Dict[str, str])
+            # Include SHAP value for frontend chart visualization
             result = []
-            for feat in feature_importance[:6]:
+            for feat in feature_importance[:8]:
                 result.append({
                     "factor": feat["factor"],
                     "impact": feat["impact"],
-                    "description": feat["description"]
+                    "description": feat["description"],
+                    "shap_value": float(round(abs(feat["_shap_value"]), 6))  # Convert numpy float to Python float
                 })
             
-            return result  # Top 6 factors
+            return result  # Top 6 factors with SHAP values
             
         except Exception as e:
             print(f"SHAP Explanation error: {e}")

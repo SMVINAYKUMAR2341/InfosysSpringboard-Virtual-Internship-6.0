@@ -14,12 +14,14 @@ import { ActivityLog } from "@/components/profile/ActivityLog";
 import { mockProfileData } from "@/data/mockProfileData";
 import { ProfileData } from "@/types/profile";
 
-// Icons
 import {
     Home, Wallet, FileText, TrendingUp, CreditCard, FolderOpen, Shield, History,
     HelpCircle, LogOut, Menu, X, ChevronRight, AlertCircle, Calendar, IndianRupee,
     CheckCircle, Clock, ArrowUpRight, Sparkles, User, Bell
 } from "lucide-react";
+
+// Charts - Professional visualization
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, RadialBarChart, RadialBar, AreaChart, Area, Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, LineChart, Line, CartesianGrid, ReferenceLine } from 'recharts';
 
 // Section Types
 type SectionKey = "home" | "loans" | "apply" | "credit" | "repayments" | "documents" | "security" | "activity" | "support";
@@ -128,6 +130,8 @@ export default function Dashboard() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [formError, setFormError] = useState('');
     const [showCoApplicant, setShowCoApplicant] = useState(false);
+    const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
+    const [showQrCode, setShowQrCode] = useState(false);
 
     // KYC WORKFLOW STATE
     interface KYCStatus {
@@ -192,6 +196,24 @@ export default function Dashboard() {
     const [pinForm, setPinForm] = useState({ current: '', new_pin: '', confirm: '' });
     const [changeError, setChangeError] = useState('');
     const [changeSuccess, setChangeSuccess] = useState('');
+
+    // PAYMENT GATEWAY STATE - Must be declared at top level
+    const [showPaymentGateway, setShowPaymentGateway] = useState(false);
+    const [paymentMethod, setPaymentMethod] = useState<'card' | 'upi' | 'netbanking' | 'wallet' | null>(null);
+    const [paymentStep, setPaymentStep] = useState<'method' | 'details' | 'processing' | 'success'>('method');
+    const [netBankingStep, setNetBankingStep] = useState<'select' | 'login'>('select');
+    const [paymentData, setPaymentData] = useState({
+        cardNumber: '',
+        cardName: '',
+        expiryMonth: '',
+        expiryYear: '',
+        cvv: '',
+        upiId: '',
+        bankName: '',
+        bankUserId: '',
+        bankPassword: '',
+        walletType: ''
+    });
 
     // Account & Security Functions (Moved to top level)
     const fetchAccountData = async () => {
@@ -835,7 +857,13 @@ export default function Dashboard() {
                 })
             });
 
-            if (!response.ok) throw new Error('Loan analysis failed');
+            if (!response.ok) {
+                if (response.status === 401) {
+                    throw new Error('Session expired. Please log in again.');
+                }
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.detail || 'Loan analysis failed');
+            }
             const result = await response.json();
 
             // Transform response to match LoanAdvisorResult interface
@@ -875,7 +903,7 @@ export default function Dashboard() {
                     reason: '',
                     provided: parseFloat(loanFormData.coapplicant_income) > 0
                 },
-                explanations: result.explanations || [],
+                explanations: result.shap_summary || [],
                 kyc_required: result.kyc_required,
                 next_steps: result.next_steps || []
             });
@@ -884,8 +912,8 @@ export default function Dashboard() {
             if (result.coapplicant?.suggested && !result.coapplicant?.provided) {
                 setShowCoApplicant(true);
             }
-        } catch (error) {
-            setFormError('Unable to analyze loan. Please try again.');
+        } catch (error: any) {
+            setFormError(error.message || 'Unable to analyze loan. Please try again.');
         } finally {
             setIsSubmitting(false);
         }
@@ -917,6 +945,30 @@ export default function Dashboard() {
         } catch (error) {
             console.error("Error downloading report:", error);
             alert("Error downloading report.");
+        }
+    };
+
+    // Generate QR Code Handler
+    const handleGenerateQRCode = async (appId: string) => {
+        if (!appId) return;
+        try {
+            const token = localStorage.getItem('access_token');
+            const response = await fetch(`http://localhost:8000/loan-application/${appId}/report-qr`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (response.ok) {
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                setQrCodeUrl(url);
+                setShowQrCode(true);
+            } else {
+                console.error("Failed to generate QR code");
+                alert("Could not generate QR code. Please try again.");
+            }
+        } catch (error) {
+            console.error("Error generating QR code:", error);
+            alert("Error generating QR code.");
         }
     };
 
@@ -993,7 +1045,7 @@ export default function Dashboard() {
                             <IndianRupee className="w-8 h-8 text-blue-400 mx-auto mb-2" />
                             <p className="text-gray-400 text-sm">Monthly EMI</p>
                             <p className="text-3xl font-bold text-blue-400">{formatCurrency(advisorResult.emi.monthly)}</p>
-                            <p className="text-blue-300 text-sm">{advisorResult.income_analysis.emi_to_income_ratio}% of income</p>
+                            <p className="text-blue-300 text-sm">{advisorResult.income_analysis.emi_to_income_ratio.toFixed(1)}% of income</p>
                         </div>
                         <div className="p-6 bg-gray-900 border-2 border-orange-500 rounded-2xl text-center">
                             <Wallet className="w-8 h-8 text-orange-400 mx-auto mb-2" />
@@ -1043,12 +1095,293 @@ export default function Dashboard() {
                         </div>
                     </div>
 
-                    {/* SHAP Explanations */}
+                    {/* SHAP Explanations with Professional Charts */}
                     <div className="p-6 bg-gray-900 rounded-2xl border-2 border-gray-700">
                         <h4 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
                             <Sparkles className="w-5 h-5 text-purple-400" />
                             Decision Factors (AI Explanation)
                         </h4>
+
+                        {/* Professional ML Visualizations - Best Practices */}
+                        <div className="space-y-6 mb-6">
+
+                            {/* Key Risk Metrics - Quick Summary Cards */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div className="bg-gradient-to-br from-purple-900/50 to-purple-800/30 rounded-xl p-4 border border-purple-500/30">
+                                    <p className="text-purple-300 text-xs font-medium mb-1">ML Confidence</p>
+                                    <p className="text-2xl font-bold text-white">{advisorResult.approval_probability}%</p>
+                                    <p className="text-xs text-purple-400 mt-1">{advisorResult.decision}</p>
+                                </div>
+                                <div className="bg-gradient-to-br from-blue-900/50 to-blue-800/30 rounded-xl p-4 border border-blue-500/30">
+                                    <p className="text-blue-300 text-xs font-medium mb-1">Credit Rating</p>
+                                    <p className="text-2xl font-bold text-white">{advisorResult.credit_score.rating}</p>
+                                    <p className="text-xs text-blue-400 mt-1">{advisorResult.credit_score.display}</p>
+                                </div>
+                                <div className="bg-gradient-to-br from-amber-900/50 to-amber-800/30 rounded-xl p-4 border border-amber-500/30">
+                                    <p className="text-amber-300 text-xs font-medium mb-1">EMI to Income</p>
+                                    <p className="text-2xl font-bold text-white">{advisorResult.income_analysis.emi_to_income_ratio.toFixed(1)}%</p>
+                                    <p className="text-xs text-amber-400 mt-1">{advisorResult.income_analysis.emi_to_income_ratio < 40 ? 'Healthy' : advisorResult.income_analysis.emi_to_income_ratio < 50 ? 'Borderline' : 'High Risk'}</p>
+                                </div>
+                                <div className="bg-gradient-to-br from-green-900/50 to-green-800/30 rounded-xl p-4 border border-green-500/30">
+                                    <p className="text-green-300 text-xs font-medium mb-1">Interest Rate</p>
+                                    <p className="text-2xl font-bold text-white">{advisorResult.interest_rate.annual.toFixed(2)}%</p>
+                                    <p className="text-xs text-green-400 mt-1">p.a.</p>
+                                </div>
+                            </div>
+
+                            {/* Row 1: SHAP Vertical Bar + Approval Pie */}
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                                {/* Chart 1: SHAP Feature Importance - PREMIUM HORIZONTAL BARS */}
+                                <div className="bg-gradient-to-br from-gray-800 via-gray-800 to-gray-900 rounded-xl p-5 border border-gray-700/50 shadow-xl">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-blue-500 rounded-lg flex items-center justify-center">
+                                            <span className="text-white text-sm">📊</span>
+                                        </div>
+                                        <div>
+                                            <p className="text-white text-sm font-semibold">Feature Impact Analysis</p>
+                                            <p className="text-gray-500 text-xs">SHAP values showing each factor's contribution</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Custom horizontal bars - normalized to add up to 100% */}
+                                    <div className="space-y-3 mt-4">
+                                        {(() => {
+                                            const factors = advisorResult.explanations.slice(0, 5);
+                                            const totalImpact = factors.reduce((sum: number, f: any) =>
+                                                sum + Math.abs(f.shap_value || 0.15) * 100, 0);
+
+                                            return factors.map((f: any, idx: number) => {
+                                                const impactValue = Math.abs(f.shap_value || 0.15) * 100;
+                                                const normalizedPercent = (impactValue / totalImpact) * 100;
+                                                return (
+                                                    <div key={idx} className="group">
+                                                        <div className="flex items-center justify-between mb-1">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs ${f.impact === 'positive' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                                                                    {f.impact === 'positive' ? '↑' : '↓'}
+                                                                </span>
+                                                                <span className="text-gray-300 text-sm font-medium">{f.factor.length > 18 ? f.factor.substring(0, 18) + '...' : f.factor}</span>
+                                                            </div>
+                                                            <span className={`text-sm font-bold ${f.impact === 'positive' ? 'text-green-400' : 'text-red-400'}`}>
+                                                                {normalizedPercent.toFixed(1)}%
+                                                            </span>
+                                                        </div>
+                                                        <div className="h-3 bg-gray-700/50 rounded-full overflow-hidden">
+                                                            <div
+                                                                className={`h-full rounded-full transition-all duration-500 group-hover:opacity-80 ${f.impact === 'positive'
+                                                                    ? 'bg-gradient-to-r from-green-600 to-emerald-400'
+                                                                    : 'bg-gradient-to-r from-red-600 to-rose-400'
+                                                                    }`}
+                                                                style={{ width: `${normalizedPercent}%` }}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                );
+                                            });
+                                        })()}
+                                    </div>
+
+                                    {/* Legend */}
+                                    <div className="flex items-center justify-center gap-6 mt-4 pt-3 border-t border-gray-700/50">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-3 h-3 rounded-full bg-gradient-to-r from-green-600 to-emerald-400"></div>
+                                            <span className="text-gray-400 text-xs">Increases Approval</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-3 h-3 rounded-full bg-gradient-to-r from-red-600 to-rose-400"></div>
+                                            <span className="text-gray-400 text-xs">Decreases Approval</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Chart 2: ML Approval Score - PIE CHART */}
+                                <div className="bg-gray-800 rounded-xl p-4">
+                                    <p className="text-gray-400 text-sm mb-1 font-medium">⭐ ML Approval Score</p>
+                                    <p className="text-gray-500 text-xs mb-3">XGBoost model prediction confidence</p>
+                                    <ResponsiveContainer width="100%" height={260}>
+                                        <PieChart>
+                                            <Pie
+                                                data={[
+                                                    { name: 'Approval Score', value: advisorResult.approval_probability, fill: advisorResult.approval_probability >= 60 ? '#22C55E' : advisorResult.approval_probability >= 35 ? '#F59E0B' : '#EF4444' },
+                                                    { name: 'Remaining', value: 100 - advisorResult.approval_probability, fill: '#374151' }
+                                                ]}
+                                                cx="50%"
+                                                cy="50%"
+                                                innerRadius={60}
+                                                outerRadius={90}
+                                                startAngle={90}
+                                                endAngle={-270}
+                                                dataKey="value"
+                                                stroke="none"
+                                            >
+                                            </Pie>
+                                            <text x="50%" y="45%" textAnchor="middle" fill="#fff" fontSize="36" fontWeight="bold">
+                                                {advisorResult.approval_probability}%
+                                            </text>
+                                            <text x="50%" y="58%" textAnchor="middle" fill={advisorResult.approval_probability >= 60 ? '#22C55E' : advisorResult.approval_probability >= 35 ? '#F59E0B' : '#EF4444'} fontSize="16" fontWeight="600">
+                                                {advisorResult.decision}
+                                            </text>
+                                            <Tooltip
+                                                contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
+                                                formatter={(value: any, name: string) => name === 'Remaining' ? null : [`${value}%`, 'ML Confidence']}
+                                            />
+                                        </PieChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+
+                            {/* Row 2: Loan Breakdown Donut + User vs Ideal Thresholds */}
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                                {/* Chart 3: Loan Cost Breakdown - DONUT CHART */}
+                                <div className="bg-gray-800 rounded-xl p-4 overflow-visible">
+                                    <p className="text-gray-400 text-sm mb-1 font-medium">💰 Loan Cost Breakdown</p>
+                                    <p className="text-gray-500 text-xs mb-3">Principal vs Interest Distribution</p>
+                                    <ResponsiveContainer width="100%" height={220}>
+                                        <PieChart>
+                                            <Pie
+                                                data={[
+                                                    { name: 'Principal', value: advisorResult.loan_details.amount, fill: '#8B5CF6' },
+                                                    { name: 'Interest', value: advisorResult.emi.total_interest, fill: '#F59E0B' }
+                                                ]}
+                                                cx="50%"
+                                                cy="45%"
+                                                innerRadius={40}
+                                                outerRadius={65}
+                                                paddingAngle={3}
+                                                dataKey="value"
+                                                stroke="none"
+                                            >
+                                            </Pie>
+                                            {/* Principal label - left side */}
+                                            <text x="15%" y="35%" textAnchor="start" fill="#8B5CF6" fontSize="12" fontWeight="600">
+                                                Principal
+                                            </text>
+                                            <text x="15%" y="47%" textAnchor="start" fill="#fff" fontSize="13" fontWeight="bold">
+                                                ₹{advisorResult.loan_details.amount.toLocaleString()}
+                                            </text>
+                                            {/* Interest label - right side */}
+                                            <text x="85%" y="55%" textAnchor="end" fill="#F59E0B" fontSize="12" fontWeight="600">
+                                                Interest
+                                            </text>
+                                            <text x="85%" y="67%" textAnchor="end" fill="#fff" fontSize="13" fontWeight="bold">
+                                                ₹{advisorResult.emi.total_interest.toLocaleString()}
+                                            </text>
+                                            <Tooltip
+                                                contentStyle={{
+                                                    backgroundColor: '#ffffff',
+                                                    border: '1px solid #E5E7EB',
+                                                    borderRadius: '8px',
+                                                    padding: '10px 14px',
+                                                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                                    color: '#1F2937'
+                                                }}
+                                                wrapperStyle={{ zIndex: 1000 }}
+                                                formatter={(value: any, name: string) => [`₹${value.toLocaleString()}`, name]}
+                                                labelStyle={{ color: '#1F2937', fontWeight: 'bold' }}
+                                                itemStyle={{ color: '#374151' }}
+                                            />
+                                            <Legend
+                                                verticalAlign="bottom"
+                                                iconType="circle"
+                                                formatter={(value: string, entry: any) => {
+                                                    const percent = ((entry.payload.value / advisorResult.emi.total_repayment) * 100).toFixed(0);
+                                                    return <span style={{ color: '#D1D5DB' }}>{value}: {percent}%</span>;
+                                                }}
+                                            />
+                                        </PieChart>
+                                    </ResponsiveContainer>
+                                    <div className="flex justify-between text-xs text-gray-400 mt-1 px-4">
+                                        <span>Monthly EMI: <span className="text-white font-semibold">₹{advisorResult.emi.monthly.toLocaleString()}</span></span>
+                                        <span>Total: <span className="text-white font-semibold">₹{advisorResult.emi.total_repayment.toLocaleString()}</span></span>
+                                    </div>
+                                </div>
+
+                                {/* Chart 4: Grouped Vertical Bar Chart */}
+                                <div className="bg-gradient-to-br from-gray-800 via-gray-800 to-gray-900 rounded-xl p-5 border border-gray-700/50 shadow-xl">
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center">
+                                            <span className="text-white text-sm">📊</span>
+                                        </div>
+                                        <div>
+                                            <p className="text-white text-sm font-semibold">Your Profile vs Ideal</p>
+                                            <p className="text-gray-500 text-xs">Side-by-side comparison</p>
+                                        </div>
+                                    </div>
+
+                                    <ResponsiveContainer width="100%" height={200}>
+                                        <BarChart
+                                            data={[
+                                                {
+                                                    name: 'EMI/Income',
+                                                    you: Math.min(advisorResult.income_analysis.emi_to_income_ratio, 100),
+                                                    ideal: 40
+                                                },
+                                                {
+                                                    name: 'DTI Ratio',
+                                                    you: Math.min(advisorResult.income_analysis.debt_to_income_ratio || 0, 100),
+                                                    ideal: 30
+                                                },
+                                                {
+                                                    name: 'Approval',
+                                                    you: advisorResult.approval_probability,
+                                                    ideal: 60
+                                                },
+                                            ]}
+                                            margin={{ top: 20, right: 20, left: 0, bottom: 5 }}
+                                            barGap={4}
+                                            barCategoryGap="20%"
+                                        >
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#374151" vertical={false} />
+                                            <XAxis dataKey="name" tick={{ fill: '#D1D5DB', fontSize: 11 }} axisLine={{ stroke: '#4B5563' }} />
+                                            <YAxis domain={[0, 100]} tick={{ fill: '#9CA3AF', fontSize: 10 }} tickFormatter={(v) => `${v}%`} axisLine={{ stroke: '#4B5563' }} />
+                                            <Tooltip
+                                                contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
+                                                formatter={(value: any, name: string) => [`${value.toFixed(1)}%`, name === 'you' ? 'Your Value' : 'Ideal Target']}
+                                                labelStyle={{ color: '#fff', fontWeight: 'bold' }}
+                                            />
+                                            <Legend
+                                                formatter={(value: string) => <span style={{ color: '#D1D5DB', fontSize: '12px' }}>{value === 'you' ? 'You' : 'Ideal'}</span>}
+                                            />
+                                            <Bar dataKey="you" name="you" fill="#8B5CF6" radius={[4, 4, 0, 0]} />
+                                            <Bar dataKey="ideal" name="ideal" fill="#22C55E" radius={[4, 4, 0, 0]} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+
+                            {/* Row 3: Full Width Risk Profile Radar */}
+                            <div className="bg-gray-800 rounded-xl p-4">
+                                <p className="text-gray-400 text-sm mb-1 font-medium">🔍 Risk Assessment Radar</p>
+                                <p className="text-gray-500 text-xs mb-3">Multi-dimensional profile analysis (higher = better)</p>
+                                <ResponsiveContainer width="100%" height={320}>
+                                    <RadarChart cx="50%" cy="50%" outerRadius="70%" data={[
+                                        { subject: 'Income', A: Math.min(100, (advisorResult.income_analysis.monthly_income / 1000)), fullMark: 100 },
+                                        { subject: 'Debt Mgmt', A: Math.max(0, 100 - (advisorResult.income_analysis.debt_to_income_ratio || 0) * 2), fullMark: 100 },
+                                        { subject: 'EMI Afford', A: Math.max(0, 100 - (advisorResult.income_analysis.emi_to_income_ratio || 0) * 2), fullMark: 100 },
+                                        { subject: 'Credit', A: advisorResult.credit_score.rating === 'Excellent' ? 95 : advisorResult.credit_score.rating === 'Good' ? 75 : advisorResult.credit_score.rating === 'Fair' ? 50 : 25, fullMark: 100 },
+                                        { subject: 'ML Score', A: advisorResult.approval_probability, fullMark: 100 }
+                                    ]}>
+                                        <PolarGrid gridType="polygon" stroke="#4B5563" />
+                                        <PolarAngleAxis dataKey="subject" tick={{ fill: '#D1D5DB', fontSize: 12, fontWeight: 500 }} />
+                                        <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fill: '#6B7280', fontSize: 9 }} axisLine={false} />
+                                        <Radar name="Your Profile" dataKey="A" stroke="#8B5CF6" fill="#8B5CF6" fillOpacity={0.5} strokeWidth={2} dot={{ fill: '#A78BFA', r: 5, strokeWidth: 0 }} />
+                                        <Radar name="Ideal (100)" dataKey="fullMark" stroke="#22C55E" fill="none" strokeWidth={2} strokeDasharray="4 4" />
+                                        <Tooltip
+                                            contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
+                                            formatter={(value: any) => [`${value.toFixed(0)}/100`, '']}
+                                        />
+                                        <Legend
+                                            wrapperStyle={{ paddingTop: '10px' }}
+                                            formatter={(value: string) => <span style={{ color: '#9CA3AF' }}>{value}</span>}
+                                        />
+                                    </RadarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+
+                        {/* Factor Details Cards */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             {advisorResult.explanations.map((factor, idx) => (
                                 <div key={idx} className={`p-4 rounded-xl ${factor.impact === 'positive' ? 'bg-gray-800 border-2 border-green-500' : 'bg-gray-800 border-2 border-red-500'}`}>
@@ -1063,23 +1396,25 @@ export default function Dashboard() {
                     </div>
 
                     {/* Co-Applicant Suggestion */}
-                    {advisorResult.coapplicant.suggested && !advisorResult.coapplicant.provided && (
-                        <div className="p-4 bg-gray-900 border-2 border-yellow-500 rounded-xl">
-                            <div className="flex items-center gap-3">
-                                <User className="w-6 h-6 text-yellow-400" />
-                                <div>
-                                    <p className="text-yellow-400 font-medium">Co-Applicant Recommended</p>
-                                    <p className="text-gray-300 text-sm">{advisorResult.coapplicant.reason}</p>
+                    {
+                        advisorResult.coapplicant.suggested && !advisorResult.coapplicant.provided && (
+                            <div className="p-4 bg-gray-900 border-2 border-yellow-500 rounded-xl">
+                                <div className="flex items-center gap-3">
+                                    <User className="w-6 h-6 text-yellow-400" />
+                                    <div>
+                                        <p className="text-yellow-400 font-medium">Co-Applicant Recommended</p>
+                                        <p className="text-gray-300 text-sm">{advisorResult.coapplicant.reason}</p>
+                                    </div>
+                                    <button
+                                        onClick={() => { setAdvisorResult(null); setShowCoApplicant(true); }}
+                                        className="ml-auto px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition"
+                                    >
+                                        Add Co-Applicant & Reapply
+                                    </button>
                                 </div>
-                                <button
-                                    onClick={() => { setAdvisorResult(null); setShowCoApplicant(true); }}
-                                    className="ml-auto px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition"
-                                >
-                                    Add Co-Applicant & Reapply
-                                </button>
                             </div>
-                        </div>
-                    )}
+                        )
+                    }
 
                     {/* Next Steps */}
                     <div className="p-6 bg-gray-900 rounded-2xl border-2 border-gray-700">
@@ -1116,6 +1451,8 @@ export default function Dashboard() {
                                 setAdvisorResult(null);
                                 setKycStatus(null);
                                 setKycStep(1);
+                                setShowQrCode(false);
+                                setQrCodeUrl(null);
                             }}
                             className="flex-1 py-4 bg-gray-700 hover:bg-gray-600 rounded-xl text-white font-semibold transition"
                         >
@@ -1129,7 +1466,85 @@ export default function Dashboard() {
                             Download Report
                         </button>
                     </div>
-                </div>
+
+                    {/* QR Code Section */}
+                    <div className="mt-6 p-6 bg-gray-800/50 rounded-2xl border border-gray-700">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-lg flex items-center justify-center">
+                                    <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h4 className="text-white font-semibold">Scan to Download on Mobile</h4>
+                                    <p className="text-gray-400 text-sm">Access your report on any device</p>
+                                </div>
+                            </div>
+                            {!showQrCode && (
+                                <button
+                                    onClick={() => handleGenerateQRCode(advisorResult.application_id!)}
+                                    className="px-6 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 rounded-lg text-white font-medium transition flex items-center gap-2"
+                                >
+                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                    </svg>
+                                    Generate QR Code
+                                </button>
+                            )}
+                        </div>
+
+                        {showQrCode && qrCodeUrl && (
+                            <div className="flex flex-col items-center justify-center py-6 space-y-4">
+                                <div className="p-4 bg-white rounded-2xl shadow-2xl">
+                                    <img 
+                                        src={qrCodeUrl} 
+                                        alt="QR Code for Report Download" 
+                                        className="w-48 h-48"
+                                    />
+                                </div>
+                                <div className="text-center space-y-2">
+                                    <p className="text-white font-medium">Scan with your phone's camera</p>
+                                    <p className="text-gray-400 text-sm">Link expires in 24 hours</p>
+                                    <div className="flex items-center gap-2 justify-center text-green-400 text-sm">
+                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                                        </svg>
+                                        <span>Secure & Encrypted Link</span>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        setShowQrCode(false);
+                                        if (qrCodeUrl) {
+                                            window.URL.revokeObjectURL(qrCodeUrl);
+                                            setQrCodeUrl(null);
+                                        }
+                                    }}
+                                    className="mt-4 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-gray-300 text-sm transition"
+                                >
+                                    Hide QR Code
+                                </button>
+                            </div>
+                        )}
+
+                        {!showQrCode && (
+                            <div className="mt-4 flex items-start gap-3 p-4 bg-blue-900/20 border border-blue-500/30 rounded-xl">
+                                <svg className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <div className="text-sm text-blue-200">
+                                    <p className="font-medium mb-1">Cross-Device Access</p>
+                                    <ul className="list-disc list-inside space-y-1 text-blue-300">
+                                        <li>Scan QR code with any smartphone camera</li>
+                                        <li>Download report without login required</li>
+                                        <li>Share link valid for 24 hours</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div >
             );
         }
 
@@ -1177,6 +1592,7 @@ export default function Dashboard() {
                                     min="0"
                                     value={loanFormData.age}
                                     onChange={(e) => handleLoanFormChange('age', e.target.value)}
+                                    onWheel={(e) => e.currentTarget.blur()}
                                     placeholder="e.g., 30"
                                     style={{ color: '#ffffff', backgroundColor: '#1f2937' }}
                                     className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white placeholder-gray-400"
@@ -1217,6 +1633,7 @@ export default function Dashboard() {
                                     min="0"
                                     value={loanFormData.experience}
                                     onChange={(e) => handleLoanFormChange('experience', e.target.value)}
+                                    onWheel={(e) => e.currentTarget.blur()}
                                     placeholder="e.g., 5"
                                     style={{ color: '#ffffff', backgroundColor: '#1f2937' }}
                                     className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white placeholder-gray-400"
@@ -1229,6 +1646,7 @@ export default function Dashboard() {
                                     min="0"
                                     value={loanFormData.job_tenure}
                                     onChange={(e) => handleLoanFormChange('job_tenure', e.target.value)}
+                                    onWheel={(e) => e.currentTarget.blur()}
                                     placeholder="e.g., 3"
                                     style={{ color: '#ffffff', backgroundColor: '#1f2937' }}
                                     className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white placeholder-gray-400"
@@ -1266,6 +1684,7 @@ export default function Dashboard() {
                                         min="0"
                                         value={loanFormData.monthly_income}
                                         onChange={(e) => handleLoanFormChange('monthly_income', e.target.value)}
+                                        onWheel={(e) => e.currentTarget.blur()}
                                         placeholder="e.g., 50000"
                                         style={{ color: '#ffffff', backgroundColor: '#1f2937' }}
                                         className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white placeholder-gray-400"
@@ -1281,6 +1700,7 @@ export default function Dashboard() {
                                         min="0"
                                         value={loanFormData.monthly_debt_payments}
                                         onChange={(e) => handleLoanFormChange('monthly_debt_payments', e.target.value)}
+                                        onWheel={(e) => e.currentTarget.blur()}
                                         placeholder="Existing EMIs, loans, etc."
                                         style={{ color: '#ffffff', backgroundColor: '#1f2937' }}
                                         className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white placeholder-gray-400"
@@ -1305,6 +1725,7 @@ export default function Dashboard() {
                                         min="0"
                                         value={loanFormData.loan_amount}
                                         onChange={(e) => handleLoanFormChange('loan_amount', e.target.value)}
+                                        onWheel={(e) => e.currentTarget.blur()}
                                         placeholder="e.g., 500000"
                                         style={{ color: '#ffffff', backgroundColor: '#1f2937' }}
                                         className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white placeholder-gray-400"
@@ -1437,6 +1858,7 @@ export default function Dashboard() {
                                             min="0"
                                             value={loanFormData.coapplicant_income}
                                             onChange={(e) => handleLoanFormChange('coapplicant_income', e.target.value)}
+                                            onWheel={(e) => e.currentTarget.blur()}
                                             placeholder="e.g., 30000"
                                             style={{ color: '#ffffff', backgroundColor: '#1f2937' }}
                                             className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white placeholder-gray-400"
@@ -1823,6 +2245,53 @@ export default function Dashboard() {
         </div>
     );
 
+    // PAYMENT GATEWAY HANDLERS
+    const handlePayNow = () => {
+        setShowPaymentGateway(true);
+        setPaymentStep('method');
+        setPaymentMethod(null);
+        setNetBankingStep('select');
+    };
+
+    const handlePaymentMethodSelect = (method: typeof paymentMethod) => {
+        setPaymentMethod(method);
+        setPaymentStep('details');
+        if (method === 'netbanking') {
+            setNetBankingStep('select');
+        }
+    };
+
+    const handleBankSelect = (bank: string) => {
+        setPaymentData({...paymentData, bankName: bank});
+        setNetBankingStep('login');
+    };
+
+    const processPayment = () => {
+        setPaymentStep('processing');
+        setTimeout(() => {
+            setPaymentStep('success');
+        }, 3000);
+    };
+
+    const closePaymentGateway = () => {
+        setShowPaymentGateway(false);
+        setPaymentStep('method');
+        setPaymentMethod(null);
+        setNetBankingStep('select');
+        setPaymentData({
+            cardNumber: '',
+            cardName: '',
+            expiryMonth: '',
+            expiryYear: '',
+            cvv: '',
+            upiId: '',
+            bankName: '',
+            bankUserId: '',
+            bankPassword: '',
+            walletType: ''
+        });
+    };
+
     // REPAYMENTS SECTION
     const renderRepaymentsSection = () => (
         <div className="space-y-6">
@@ -1848,10 +2317,399 @@ export default function Dashboard() {
                         <p className="text-teal-400 text-sm mt-1">per annum</p>
                     </div>
                 </div>
-                <button className="w-full py-3 bg-teal-500 hover:bg-teal-600 rounded-xl text-white font-semibold transition">
+                <button 
+                    onClick={handlePayNow}
+                    className="w-full py-3 bg-teal-500 hover:bg-teal-600 rounded-xl text-white font-semibold transition"
+                >
                     Pay Now
                 </button>
             </div>
+
+            {/* PAYMENT GATEWAY MODAL */}
+            {showPaymentGateway && (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-gray-900 rounded-2xl border border-gray-700 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                        {/* Header */}
+                        <div className="p-6 border-b border-gray-700 flex items-center justify-between sticky top-0 bg-gray-900">
+                            <div>
+                                <h2 className="text-2xl font-bold text-white">Secure Payment Gateway</h2>
+                                <p className="text-gray-400 text-sm">Amount: {formatCurrency(mockDashboardData.activeLoan.nextEmiAmount)}</p>
+                            </div>
+                            <button onClick={closePaymentGateway} className="text-gray-400 hover:text-white">
+                                <X className="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        <div className="p-6">
+                            {/* STEP 1: SELECT PAYMENT METHOD */}
+                            {paymentStep === 'method' && (
+                                <div className="space-y-4">
+                                    <h3 className="text-lg font-semibold text-white mb-4">Choose Payment Method</h3>
+                                    
+                                    {/* Credit/Debit Card */}
+                                    <button
+                                        onClick={() => handlePaymentMethodSelect('card')}
+                                        className="w-full p-4 bg-gray-800 hover:bg-gray-750 border border-gray-700 hover:border-teal-500 rounded-xl flex items-center gap-4 transition group"
+                                    >
+                                        <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                                            <CreditCard className="w-6 h-6 text-white" />
+                                        </div>
+                                        <div className="flex-1 text-left">
+                                            <p className="text-white font-semibold">Credit / Debit Card</p>
+                                            <p className="text-gray-400 text-sm">Visa, Mastercard, RuPay, Amex</p>
+                                        </div>
+                                        <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-teal-400" />
+                                    </button>
+
+                                    {/* UPI */}
+                                    <button
+                                        onClick={() => handlePaymentMethodSelect('upi')}
+                                        className="w-full p-4 bg-gray-800 hover:bg-gray-750 border border-gray-700 hover:border-teal-500 rounded-xl flex items-center gap-4 transition group"
+                                    >
+                                        <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-600 rounded-lg flex items-center justify-center">
+                                            <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                                <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/>
+                                            </svg>
+                                        </div>
+                                        <div className="flex-1 text-left">
+                                            <p className="text-white font-semibold">UPI</p>
+                                            <p className="text-gray-400 text-sm">Google Pay, PhonePe, Paytm, BHIM</p>
+                                        </div>
+                                        <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-teal-400" />
+                                    </button>
+
+                                    {/* Net Banking */}
+                                    <button
+                                        onClick={() => handlePaymentMethodSelect('netbanking')}
+                                        className="w-full p-4 bg-gray-800 hover:bg-gray-750 border border-gray-700 hover:border-teal-500 rounded-xl flex items-center gap-4 transition group"
+                                    >
+                                        <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-teal-600 rounded-lg flex items-center justify-center">
+                                            <Wallet className="w-6 h-6 text-white" />
+                                        </div>
+                                        <div className="flex-1 text-left">
+                                            <p className="text-white font-semibold">Net Banking</p>
+                                            <p className="text-gray-400 text-sm">All major banks supported</p>
+                                        </div>
+                                        <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-teal-400" />
+                                    </button>
+
+                                    {/* Wallets */}
+                                    <button
+                                        onClick={() => handlePaymentMethodSelect('wallet')}
+                                        className="w-full p-4 bg-gray-800 hover:bg-gray-750 border border-gray-700 hover:border-teal-500 rounded-xl flex items-center gap-4 transition group"
+                                    >
+                                        <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-rose-600 rounded-lg flex items-center justify-center">
+                                            <Sparkles className="w-6 h-6 text-white" />
+                                        </div>
+                                        <div className="flex-1 text-left">
+                                            <p className="text-white font-semibold">Digital Wallets</p>
+                                            <p className="text-gray-400 text-sm">Paytm, Amazon Pay, PhonePe</p>
+                                        </div>
+                                        <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-teal-400" />
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* STEP 2: PAYMENT DETAILS */}
+                            {paymentStep === 'details' && paymentMethod === 'card' && (
+                                <div className="space-y-4">
+                                    <button onClick={() => setPaymentStep('method')} className="text-teal-400 hover:text-teal-300 flex items-center gap-1 text-sm mb-4">
+                                        ← Back to payment methods
+                                    </button>
+                                    <h3 className="text-lg font-semibold text-white mb-4">Enter Card Details</h3>
+                                    
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-300 mb-2">Card Number</label>
+                                            <input
+                                                type="text"
+                                                placeholder="1234 5678 9012 3456"
+                                                maxLength={19}
+                                                value={paymentData.cardNumber}
+                                                onChange={(e) => setPaymentData({...paymentData, cardNumber: e.target.value})}
+                                                className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-white focus:outline-none focus:border-teal-500"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-300 mb-2">Cardholder Name</label>
+                                            <input
+                                                type="text"
+                                                placeholder="JOHN DOE"
+                                                value={paymentData.cardName}
+                                                onChange={(e) => setPaymentData({...paymentData, cardName: e.target.value})}
+                                                className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-white focus:outline-none focus:border-teal-500"
+                                            />
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-300 mb-2">Month</label>
+                                                <input
+                                                    type="text"
+                                                    placeholder="MM"
+                                                    maxLength={2}
+                                                    value={paymentData.expiryMonth}
+                                                    onChange={(e) => setPaymentData({...paymentData, expiryMonth: e.target.value})}
+                                                    className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-white focus:outline-none focus:border-teal-500"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-300 mb-2">Year</label>
+                                                <input
+                                                    type="text"
+                                                    placeholder="YY"
+                                                    maxLength={2}
+                                                    value={paymentData.expiryYear}
+                                                    onChange={(e) => setPaymentData({...paymentData, expiryYear: e.target.value})}
+                                                    className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-white focus:outline-none focus:border-teal-500"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-300 mb-2">CVV</label>
+                                                <input
+                                                    type="password"
+                                                    placeholder="123"
+                                                    maxLength={3}
+                                                    value={paymentData.cvv}
+                                                    onChange={(e) => setPaymentData({...paymentData, cvv: e.target.value})}
+                                                    className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-white focus:outline-none focus:border-teal-500"
+                                                />
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={processPayment}
+                                            className="w-full py-3 bg-teal-500 hover:bg-teal-600 rounded-xl text-white font-semibold transition mt-6"
+                                        >
+                                            Pay {formatCurrency(mockDashboardData.activeLoan.nextEmiAmount)}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {paymentStep === 'details' && paymentMethod === 'upi' && (
+                                <div className="space-y-4">
+                                    <button onClick={() => setPaymentStep('method')} className="text-teal-400 hover:text-teal-300 flex items-center gap-1 text-sm mb-4">
+                                        ← Back to payment methods
+                                    </button>
+                                    <h3 className="text-lg font-semibold text-white mb-4">Enter UPI ID</h3>
+                                    
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-300 mb-2">UPI ID</label>
+                                            <input
+                                                type="text"
+                                                placeholder="yourname@paytm"
+                                                value={paymentData.upiId}
+                                                onChange={(e) => setPaymentData({...paymentData, upiId: e.target.value})}
+                                                className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-white focus:outline-none focus:border-teal-500"
+                                            />
+                                            <p className="text-gray-400 text-xs mt-2">Enter your UPI ID (e.g., name@gpay, name@paytm)</p>
+                                        </div>
+                                        <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl">
+                                            <p className="text-blue-400 text-sm">You will receive a payment request on your UPI app</p>
+                                        </div>
+                                        <button
+                                            onClick={processPayment}
+                                            className="w-full py-3 bg-teal-500 hover:bg-teal-600 rounded-xl text-white font-semibold transition"
+                                        >
+                                            Send Payment Request
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {paymentStep === 'details' && paymentMethod === 'netbanking' && (
+                                <div className="space-y-4">
+                                    <button onClick={() => setPaymentStep('method')} className="text-teal-400 hover:text-teal-300 flex items-center gap-1 text-sm mb-4">
+                                        ← Back to payment methods
+                                    </button>
+                                    
+                                    {netBankingStep === 'select' ? (
+                                        <>
+                                            <h3 className="text-lg font-semibold text-white mb-4">Select Your Bank</h3>
+                                            <div className="space-y-3">
+                                                {[
+                                                    { name: 'State Bank of India', logo: '🏦' },
+                                                    { name: 'HDFC Bank', logo: '🏦' },
+                                                    { name: 'ICICI Bank', logo: '🏦' },
+                                                    { name: 'Axis Bank', logo: '🏦' },
+                                                    { name: 'Kotak Mahindra Bank', logo: '🏦' },
+                                                    { name: 'Punjab National Bank', logo: '🏦' },
+                                                    { name: 'Bank of Baroda', logo: '🏦' },
+                                                    { name: 'Canara Bank', logo: '🏦' }
+                                                ].map((bank) => (
+                                                    <button
+                                                        key={bank.name}
+                                                        onClick={() => handleBankSelect(bank.name)}
+                                                        className="w-full p-4 bg-gray-800 hover:bg-gray-750 border border-gray-700 hover:border-teal-500 rounded-xl flex items-center gap-3 text-left transition group"
+                                                    >
+                                                        <div className="text-2xl">{bank.logo}</div>
+                                                        <div className="flex-1">
+                                                            <p className="text-white font-medium">{bank.name}</p>
+                                                            <p className="text-gray-400 text-xs">Retail & Corporate Banking</p>
+                                                        </div>
+                                                        <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-teal-400" />
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <button 
+                                                onClick={() => setNetBankingStep('select')} 
+                                                className="text-teal-400 hover:text-teal-300 flex items-center gap-1 text-sm mb-4"
+                                            >
+                                                ← Change Bank
+                                            </button>
+                                            <div className="p-4 bg-gradient-to-r from-blue-900/30 to-purple-900/30 border border-blue-700/50 rounded-xl mb-4">
+                                                <div className="flex items-center gap-3 mb-2">
+                                                    <div className="text-2xl">🏦</div>
+                                                    <div>
+                                                        <p className="text-white font-semibold">{paymentData.bankName}</p>
+                                                        <p className="text-gray-400 text-xs">Internet Banking Login</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <h3 className="text-lg font-semibold text-white mb-4">Login to Complete Payment</h3>
+                                            
+                                            <div className="space-y-4">
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-300 mb-2">User ID / Customer ID</label>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Enter your User ID"
+                                                        value={paymentData.bankUserId}
+                                                        onChange={(e) => setPaymentData({...paymentData, bankUserId: e.target.value})}
+                                                        className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-white focus:outline-none focus:border-teal-500"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-300 mb-2">Password / IPIN</label>
+                                                    <input
+                                                        type="password"
+                                                        placeholder="Enter your password"
+                                                        value={paymentData.bankPassword}
+                                                        onChange={(e) => setPaymentData({...paymentData, bankPassword: e.target.value})}
+                                                        className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-white focus:outline-none focus:border-teal-500"
+                                                    />
+                                                </div>
+                                                
+                                                <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-xl">
+                                                    <div className="flex gap-2">
+                                                        <AlertCircle className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
+                                                        <div>
+                                                            <p className="text-yellow-400 text-sm font-medium mb-1">Security Notice</p>
+                                                            <p className="text-yellow-300/80 text-xs">
+                                                                This is a mock payment gateway. Your actual bank credentials are never stored or transmitted.
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="p-3 bg-gray-800 rounded-xl border border-gray-700">
+                                                    <div className="flex justify-between text-sm mb-1">
+                                                        <span className="text-gray-400">Payment Amount</span>
+                                                        <span className="text-white font-semibold">{formatCurrency(mockDashboardData.activeLoan.nextEmiAmount)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between text-sm">
+                                                        <span className="text-gray-400">Payee</span>
+                                                        <span className="text-white">Secure Identity Hub</span>
+                                                    </div>
+                                                </div>
+                                                
+                                                <button
+                                                    onClick={processPayment}
+                                                    disabled={!paymentData.bankUserId || !paymentData.bankPassword}
+                                                    className="w-full py-3 bg-teal-500 hover:bg-teal-600 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-xl text-white font-semibold transition"
+                                                >
+                                                    Proceed to Pay
+                                                </button>
+
+                                                <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
+                                                    <Shield className="w-3 h-3" />
+                                                    <span>Protected by 2048-bit encryption</span>
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            )}
+
+                            {paymentStep === 'details' && paymentMethod === 'wallet' && (
+                                <div className="space-y-4">
+                                    <button onClick={() => setPaymentStep('method')} className="text-teal-400 hover:text-teal-300 flex items-center gap-1 text-sm mb-4">
+                                        ← Back to payment methods
+                                    </button>
+                                    <h3 className="text-lg font-semibold text-white mb-4">Select Digital Wallet</h3>
+                                    
+                                    <div className="space-y-3">
+                                        {['Paytm Wallet', 'PhonePe Wallet', 'Amazon Pay', 'Mobikwik', 'Freecharge'].map((wallet) => (
+                                            <button
+                                                key={wallet}
+                                                onClick={() => {
+                                                    setPaymentData({...paymentData, walletType: wallet});
+                                                    processPayment();
+                                                }}
+                                                className="w-full p-3 bg-gray-800 hover:bg-gray-750 border border-gray-700 hover:border-teal-500 rounded-xl text-left text-white transition"
+                                            >
+                                                {wallet}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* STEP 3: PROCESSING */}
+                            {paymentStep === 'processing' && (
+                                <div className="text-center py-12">
+                                    <div className="w-16 h-16 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                                    <h3 className="text-xl font-semibold text-white mb-2">Processing Payment...</h3>
+                                    <p className="text-gray-400">Please wait while we process your payment</p>
+                                </div>
+                            )}
+
+                            {/* STEP 4: SUCCESS */}
+                            {paymentStep === 'success' && (
+                                <div className="text-center py-12">
+                                    <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <CheckCircle className="w-10 h-10 text-green-400" />
+                                    </div>
+                                    <h3 className="text-2xl font-bold text-white mb-2">Payment Successful!</h3>
+                                    <p className="text-gray-400 mb-6">Transaction ID: TXN{Date.now().toString().slice(-10)}</p>
+                                    <div className="p-4 bg-gray-800 rounded-xl mb-6 text-left max-w-sm mx-auto">
+                                        <div className="flex justify-between mb-2">
+                                            <span className="text-gray-400">Amount Paid</span>
+                                            <span className="text-white font-semibold">{formatCurrency(mockDashboardData.activeLoan.nextEmiAmount)}</span>
+                                        </div>
+                                        <div className="flex justify-between mb-2">
+                                            <span className="text-gray-400">Payment Method</span>
+                                            <span className="text-white">{paymentMethod?.toUpperCase()}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-gray-400">Date & Time</span>
+                                            <span className="text-white">{new Date().toLocaleString('en-IN')}</span>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={closePaymentGateway}
+                                        className="px-6 py-3 bg-teal-500 hover:bg-teal-600 rounded-xl text-white font-semibold transition"
+                                    >
+                                        Done
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Security Badge */}
+                        {paymentStep !== 'success' && (
+                            <div className="p-4 bg-gray-800 border-t border-gray-700 flex items-center justify-center gap-2">
+                                <Shield className="w-4 h-4 text-green-400" />
+                                <p className="text-sm text-gray-400">Secured by 256-bit SSL encryption</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 

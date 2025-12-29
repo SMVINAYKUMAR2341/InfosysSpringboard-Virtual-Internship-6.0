@@ -1,13 +1,12 @@
 import { useState } from 'react';
 import { CommunicationPreferences as Preferences } from '@/types/profile';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Switch } from '@/components/ui/switch';
-import { Badge } from '@/components/ui/badge';
-import { 
-  Bell, 
-  MessageSquare, 
-  Mail, 
-  CreditCard, 
+import { Card, CardContent, CardHeader, CardTitle, Badge } from '@/components/ui/core';
+import { Switch } from '@/components/ui/layout';
+import {
+  Bell,
+  MessageSquare,
+  Mail,
+  CreditCard,
   Megaphone,
   AlertTriangle,
   Lock
@@ -20,27 +19,27 @@ interface CommunicationPreferencesProps {
 }
 
 const preferenceItems = [
-  { 
-    key: 'smsNotifications' as const, 
-    label: 'SMS Notifications', 
+  {
+    key: 'smsNotifications' as const,
+    label: 'SMS Notifications',
     description: 'Receive updates via SMS',
     icon: MessageSquare,
   },
-  { 
-    key: 'emailNotifications' as const, 
-    label: 'Email Notifications', 
+  {
+    key: 'emailNotifications' as const,
+    label: 'Email Notifications',
     description: 'Receive updates via email',
     icon: Mail,
   },
-  { 
-    key: 'paymentReminders' as const, 
-    label: 'Payment Reminders', 
+  {
+    key: 'paymentReminders' as const,
+    label: 'Payment Reminders',
     description: 'Get notified before payment due dates',
     icon: CreditCard,
   },
-  { 
-    key: 'promotionalOffers' as const, 
-    label: 'Promotional Offers', 
+  {
+    key: 'promotionalOffers' as const,
+    label: 'Promotional Offers',
     description: 'Receive offers and promotions',
     icon: Megaphone,
   },
@@ -72,9 +71,9 @@ export function CommunicationPreferences({ preferences }: CommunicationPreferenc
           {preferenceItems.map((item) => {
             const Icon = item.icon;
             const isEnabled = prefs[item.key];
-            
+
             return (
-              <div 
+              <div
                 key={item.key}
                 className={cn(
                   'flex items-center justify-between p-3 rounded-lg border transition-all',
@@ -96,7 +95,7 @@ export function CommunicationPreferences({ preferences }: CommunicationPreferenc
                     <p className="text-xs text-muted-foreground">{item.description}</p>
                   </div>
                 </div>
-                <Switch 
+                <Switch
                   checked={isEnabled}
                   onCheckedChange={(checked) => handleToggle(item.key, checked)}
                 />

@@ -65,9 +65,71 @@ npm run dev
 The frontend will be available at `http://localhost:5173`.
 
 ## Features
-- **User Authentication**: Secure signup and login.
-- **Loan Prediction**: AI-powered loan eligibility assessment.
-- **Dashboard**: View loan status and history.
+- **User Authentication**: Secure signup and login with JWT tokens
+- **AI-Powered Loan Prediction**: Machine learning-based loan eligibility assessment with SHAP explanations
+- **Interactive Dashboard**: Real-time loan status, credit score monitoring, and financial overview
+- **Loan Application**: Step-by-step loan application form with AI advisor
+- **PDF Report Generation**: Comprehensive RBI-compliant loan analysis reports
+- **QR Code Sharing**: Share and download reports on mobile devices
+- **Payment Gateway**: Mock payment integration (Card, UPI, Net Banking, Wallets)
+- **Profile Management**: Complete user profile and security settings
+
+## Screenshots
+
+### 1. Dashboard - Financial Overview
+![Dashboard](screenshots/dashboard.png)
+- Real-time credit score monitoring (752/900)
+- Active loan tracking with outstanding balance
+- AI-powered loan eligibility predictions (₹8,00,000 pre-approved)
+- Alerts & notifications center
+- AI Credit Advisor chatbot
+
+### 2. My Loans
+![My Loans](screenshots/my-loans.png)
+- View all active loans with details
+- Track loan ID, type, amount, and outstanding balance
+- Real-time status updates
+
+### 3. Apply for Loan
+![Apply for Loan](screenshots/apply-loan.png)
+- AI-Powered Loan Eligibility Advisor
+- Personal & Employment information
+- Financial details with automatic calculations
+- Loan details configuration
+- Household information
+- Instant eligibility assessment
+
+### 4. Loan Analysis Results
+![Loan Analysis](screenshots/loan-analysis.png)
+- Comprehensive approval decision (95% approval score)
+- Credit score range prediction (710-760)
+- Interest rate analysis (12.75%)
+- Monthly EMI calculation (₹2,263)
+- Total interest breakdown (₹1,35,752)
+- Decision factors with AI explanations
+- Feature impact analysis
+- ML approval score visualization
+- Loan cost breakdown chart
+- Risk assessment radar chart
+- Next steps guidance (KYC, documentation)
+- PDF report download & QR code sharing
+
+### 5. Security & Profile Settings
+![Profile Settings](screenshots/profile-settings.png)
+- Complete account information
+- Customer ID: LA26253834
+- Email verification status
+- Mobile number & address details
+- KYC status tracking
+- Password management
+- Account role information
+
+### 6. Mobile QR Code Download
+![QR Code](screenshots/qr-code.png)
+- Scan to download report on mobile
+- Secure & encrypted link
+- 24-hour expiration for security
+- Works across all devices
 
 ## Deployment
 This repository is configured to include the `.env` file for ease of setup. **Do not use these credentials in a production environment.**

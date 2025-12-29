@@ -11,5 +11,7 @@ fpdf2
 python-dotenv
 pandas
 numpy
+matplotlib
 joblib
 scikit-learn
+qrcode[pil]

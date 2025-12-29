@@ -2627,6 +2627,29 @@ async def get_loan_report(application_id: str, db: AsyncSession = Depends(databa
         
         pred = application.prediction
         
+        # Calculate total interest
+        total_interest = (pred.total_repayment or 0) - (application.loan_amount or 0)
+        
+        # Calculate income ratios from real application data
+        monthly_income = application.monthly_income or 50000
+        monthly_debt = application.monthly_debt_payments or 0
+        emi_to_income = (pred.emi / monthly_income * 100) if monthly_income > 0 and pred.emi else 0
+        debt_to_income = ((monthly_debt + (pred.emi or 0)) / monthly_income * 100) if monthly_income > 0 else 0
+        
+        # Determine credit score rating from approval probability
+        if pred.approval_probability >= 75:
+            credit_rating = "Excellent"
+            credit_score = 780
+        elif pred.approval_probability >= 60:
+            credit_rating = "Good"
+            credit_score = 720
+        elif pred.approval_probability >= 40:
+            credit_rating = "Fair"
+            credit_score = 650
+        else:
+            credit_rating = "Poor"
+            credit_score = 550
+        
         # Helper to safely get nested dicts if stored as such, or reconstruct
         analysis_result = {
             "decision": pred.decision,
@@ -2641,6 +2664,16 @@ async def get_loan_report(application_id: str, db: AsyncSession = Depends(databa
             "emi": {
                 "monthly": pred.emi,
                 "total_repayment": pred.total_repayment,
+                "total_interest": total_interest,
+            },
+            "income_analysis": {
+                "monthly_income": monthly_income,
+                "emi_to_income_ratio": emi_to_income,
+                "debt_to_income_ratio": debt_to_income,
+            },
+            "credit_score": {
+                "score": credit_score,
+                "rating": credit_rating,
             },
             "explanations": pred.shap_summary if pred.shap_summary else []
         }
@@ -2654,6 +2687,17 @@ async def get_loan_report(application_id: str, db: AsyncSession = Depends(databa
                 self.mobile_number = u.mobile_number
                 self.id = str(app_obj.id)
                 self.loan_amount = app_obj.loan_amount
+                self.monthly_income = app_obj.monthly_income
+                self.loan_purpose = app_obj.loan_purpose
+                self.employment_status = app_obj.employment_status
+                self.loan_duration = app_obj.loan_duration
+                self.date_of_birth = u.date_of_birth
+                self.gender = u.gender or app_obj.gender
+                self.age = app_obj.age
+                self.address = f"{u.address_line1 or ''}, {u.city or ''}, {u.state or ''} - {u.pincode or ''}" if u.address_line1 else None
+                self.pan_number = u.pan_number
+                self.customer_id = u.customer_id
+                self.kyc_verified = u.kyc_verified
 
         app_context = AppContext(application)
         
@@ -2676,3 +2720,260 @@ async def get_loan_report(application_id: str, db: AsyncSession = Depends(databa
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# QR CODE & SHAREABLE REPORT ENDPOINTS
+# ============================================================================
+
+import qrcode
+from io import BytesIO
+import secrets
+import hashlib
+
+# Store temporary tokens (in production, use Redis or database)
+report_tokens = {}
+
+@app.get("/loan-application/{application_id}/report-qr")
+async def get_report_qr_code(application_id: str, db: AsyncSession = Depends(database.get_db)):
+    """Generate QR code for mobile report download"""
+    try:
+        # Verify application exists
+        query = select(models.LoanApplication).where(models.LoanApplication.id == application_id)
+        result = await db.execute(query)
+        application = result.scalars().first()
+        
+        if not application:
+            raise HTTPException(status_code=404, detail="Application not found")
+        
+        # Generate secure token for this report (valid for 24 hours)
+        token = secrets.token_urlsafe(32)
+        expiry = datetime.now() + timedelta(hours=24)
+        
+        # Store token with application_id
+        report_tokens[token] = {
+            "application_id": application_id,
+            "expiry": expiry
+        }
+        
+        # Create shareable URL - Use network IP instead of localhost for mobile access
+        # Get the host from request headers or use network IP
+        import socket
+        try:
+            # Get local IP address
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            local_ip = s.getsockname()[0]
+            s.close()
+            shareable_url = f"http://{local_ip}:8000/shared-report/{token}"
+        except:
+            # Fallback to localhost if IP detection fails
+            shareable_url = f"http://localhost:8000/shared-report/{token}"
+        
+        # Generate QR code
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(shareable_url)
+        qr.make(fit=True)
+        
+        # Create QR code image
+        img = qr.make_image(fill_color="black", back_color="white")
+        
+        # Convert to bytes
+        buf = BytesIO()
+        img.save(buf, format='PNG')
+        buf.seek(0)
+        
+        return Response(
+            content=buf.getvalue(),
+            media_type="image/png",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Token-Expiry": expiry.isoformat()
+            }
+        )
+    
+    except Exception as e:
+        print(f"QR Generation Error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/shared-report/{token}")
+async def get_shared_report(token: str, db: AsyncSession = Depends(database.get_db)):
+    """Download report using shareable token (no authentication required)"""
+    try:
+        # Validate token
+        if token not in report_tokens:
+            raise HTTPException(status_code=404, detail="Invalid or expired link")
+        
+        token_data = report_tokens[token]
+        
+        # Check expiry
+        if datetime.now() > token_data["expiry"]:
+            del report_tokens[token]
+            raise HTTPException(status_code=410, detail="Link expired")
+        
+        application_id = token_data["application_id"]
+        
+        # Fetch Application with User details (same logic as regular report)
+        from sqlalchemy.orm import selectinload
+        query = select(models.LoanApplication).options(
+            selectinload(models.LoanApplication.user),
+            selectinload(models.LoanApplication.prediction)
+        ).where(models.LoanApplication.id == application_id)
+        
+        result = await db.execute(query)
+        application = result.scalars().first()
+        
+        if not application or not application.prediction:
+            raise HTTPException(status_code=404, detail="Report not available")
+
+        # Generate report (same logic as regular endpoint)
+        pred = application.prediction
+        
+        total_interest = (pred.total_repayment or 0) - (application.loan_amount or 0)
+        monthly_income = application.monthly_income or 50000
+        monthly_debt = application.monthly_debt_payments or 0
+        emi_to_income = (pred.emi / monthly_income * 100) if monthly_income > 0 and pred.emi else 0
+        debt_to_income = ((monthly_debt + (pred.emi or 0)) / monthly_income * 100) if monthly_income > 0 else 0
+        
+        if pred.approval_probability >= 75:
+            credit_rating = "Excellent"
+            credit_score = 780
+        elif pred.approval_probability >= 60:
+            credit_rating = "Good"
+            credit_score = 720
+        elif pred.approval_probability >= 40:
+            credit_rating = "Fair"
+            credit_score = 650
+        else:
+            credit_rating = "Poor"
+            credit_score = 550
+        
+        analysis_result = {
+            "decision": pred.decision,
+            "decision_reason": pred.decision_reason,
+            "approval_probability": pred.approval_probability,
+            "loan_details": {
+                "amount": application.loan_amount,
+                "duration_years": application.loan_duration // 12 if application.loan_duration else 0
+            },
+            "loan_purpose": application.loan_purpose,
+            "interest_rate": {"annual": pred.interest_rate},
+            "emi": {
+                "monthly": pred.emi,
+                "total_repayment": pred.total_repayment,
+                "total_interest": total_interest,
+            },
+            "income_analysis": {
+                "monthly_income": monthly_income,
+                "emi_to_income_ratio": emi_to_income,
+                "debt_to_income_ratio": debt_to_income,
+            },
+            "credit_score": {
+                "score": credit_score,
+                "rating": credit_rating,
+            },
+            "explanations": pred.shap_summary if pred.shap_summary else []
+        }
+        
+        class AppContext:
+            def __init__(self, app_obj):
+                u = app_obj.user
+                self.full_name = f"{u.first_name} {u.last_name}" if u.first_name else "Valued Customer"
+                self.email = u.email
+                self.mobile_number = u.mobile_number
+                self.id = str(app_obj.id)
+                self.loan_amount = app_obj.loan_amount
+                self.monthly_income = app_obj.monthly_income
+                self.loan_purpose = app_obj.loan_purpose
+                self.employment_status = app_obj.employment_status
+                self.loan_duration = app_obj.loan_duration
+                self.date_of_birth = u.date_of_birth
+                self.gender = u.gender or app_obj.gender
+                self.age = app_obj.age
+                self.address = f"{u.address_line1 or ''}, {u.city or ''}, {u.state or ''} - {u.pincode or ''}" if u.address_line1 else None
+                self.pan_number = u.pan_number
+                self.customer_id = u.customer_id
+                self.kyc_verified = u.kyc_verified
+
+        app_context = AppContext(application)
+        
+        # Generate PDF
+        pdf_bytes = report_generator.generate_loan_report_pdf(app_context, analysis_result)
+        
+        # Generate filename with timestamp for uniqueness
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"Loan_Report_{application.user.customer_id}_{timestamp}.pdf"
+        
+        # Return as downloadable file with mobile-friendly headers
+        return Response(
+            content=bytes(pdf_bytes),
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Content-Type": "application/pdf",
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+                "X-Content-Type-Options": "nosniff"
+            }
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Shared Report Error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# AI CHATBOT ENDPOINT
+# ============================================================================
+
+class ChatRequest(BaseModel):
+    message: str
+    conversation_history: Optional[List[Dict[str, str]]] = None
+
+class ChatResponse(BaseModel):
+    response: str
+    timestamp: str
+
+@app.post("/chat", response_model=ChatResponse)
+async def chat_with_ai(request: ChatRequest):
+    """
+    AI Credit Advisor Chatbot
+    Uses Phi-3 LoRA fine-tuned model for financial/loan queries
+    """
+    try:
+        from . import chatbot_model
+        
+        # Generate response using the ML model
+        response = chatbot_model.generate_response(
+            request.message,
+            request.conversation_history
+        )
+        
+        return ChatResponse(
+            response=response,
+            timestamp=datetime.now().isoformat()
+        )
+        
+    except Exception as e:
+        print(f"[Chatbot API Error]: {e}")
+        # Fallback response
+        from . import chatbot_model
+        fallback = chatbot_model.fallback_response(request.message)
+        return ChatResponse(
+            response=fallback,
+            timestamp=datetime.now().isoformat()
+        )

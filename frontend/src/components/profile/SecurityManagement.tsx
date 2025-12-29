@@ -1,15 +1,13 @@
 import { useState } from 'react';
 import { SecuritySettings } from '@/types/profile';
 import { formatDateTime, getRelativeTime } from '@/data/mockProfileData';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
-import { Badge } from '@/components/ui/badge';
-import { 
-  Lock, 
-  Smartphone, 
-  Monitor, 
-  Clock, 
+import { Card, CardContent, CardHeader, CardTitle, Button, Badge } from '@/components/ui/core';
+import { Switch } from '@/components/ui/layout';
+import {
+  Lock,
+  Smartphone,
+  Monitor,
+  Clock,
   MapPin,
   Key,
   LogOut,
@@ -30,8 +28,8 @@ export function SecurityManagement({ security }: SecurityManagementProps) {
     setOtpEnabled(checked);
     toast({
       title: checked ? 'OTP Login Enabled' : 'OTP Login Disabled',
-      description: checked 
-        ? 'You will receive an OTP for each login attempt.' 
+      description: checked
+        ? 'You will receive an OTP for each login attempt.'
         : 'OTP verification has been turned off.',
     });
   };
@@ -120,9 +118,9 @@ export function SecurityManagement({ security }: SecurityManagementProps) {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-sm font-medium text-foreground">Active Sessions</p>
-            <Button 
-              variant="ghost" 
-              size="sm" 
+            <Button
+              variant="ghost"
+              size="sm"
               className="text-destructive hover:text-destructive hover:bg-destructive/10"
               onClick={handleSignOutAll}
             >
@@ -136,8 +134,8 @@ export function SecurityManagement({ security }: SecurityManagementProps) {
                 key={session.id}
                 className={cn(
                   'flex items-center justify-between p-3 rounded-lg border',
-                  session.isCurrent 
-                    ? 'border-primary/30 bg-primary/5' 
+                  session.isCurrent
+                    ? 'border-primary/30 bg-primary/5'
                     : 'border-border bg-muted/30'
                 )}
               >

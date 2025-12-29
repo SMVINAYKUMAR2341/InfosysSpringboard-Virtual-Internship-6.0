@@ -1,10 +1,8 @@
 import { ConsentRecord } from '@/types/profile';
 import { formatDateTime } from '@/data/mockProfileData';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { 
-  FileCheck, 
+import { Card, CardContent, CardHeader, CardTitle, Badge, Button } from '@/components/ui/core';
+import {
+  FileCheck,
   ExternalLink,
   FileText,
   Shield,
@@ -59,8 +57,8 @@ export function ConsentPermissions({ consents }: ConsentPermissionsProps) {
             {consents.map((consent) => {
               const Icon = consentIcons[consent.consentType];
               return (
-                <div 
-                  key={consent.id} 
+                <div
+                  key={consent.id}
                   className="grid grid-cols-12 gap-2 p-3 items-center hover:bg-muted/30 transition-colors"
                 >
                   <div className="col-span-5 flex items-center gap-2">

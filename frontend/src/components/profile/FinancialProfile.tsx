@@ -1,8 +1,7 @@
 import { FinancialProfile as Profile } from '@/types/profile';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { 
-  TrendingUp, 
+import { Card, CardContent, CardHeader, CardTitle, Badge } from '@/components/ui/core';
+import {
+  TrendingUp,
   Briefcase,
   IndianRupee,
   BarChart3,
@@ -92,11 +91,11 @@ export function FinancialProfileSection({ financial }: FinancialProfileProps) {
               {creditHealth.label}
             </Badge>
           </div>
-          
+
           {/* Progress Bar */}
           <div className="space-y-2">
             <div className="h-2 rounded-full bg-muted overflow-hidden">
-              <div 
+              <div
                 className={cn(
                   'h-full rounded-full transition-all duration-500',
                   creditHealth.barWidth,
@@ -120,7 +119,7 @@ export function FinancialProfileSection({ financial }: FinancialProfileProps) {
         <div className="p-3 rounded-lg bg-muted/50 flex items-start gap-3">
           <ShieldAlert className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
           <p className="text-xs text-muted-foreground">
-            For your privacy, exact credit scores and bureau data are not displayed. 
+            For your privacy, exact credit scores and bureau data are not displayed.
             This indicator is derived from your overall credit profile.
           </p>
         </div>

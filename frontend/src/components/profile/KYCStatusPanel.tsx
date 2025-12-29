@@ -1,13 +1,11 @@
 import { KYCStatus } from '@/types/profile';
 import { formatDate } from '@/data/mockProfileData';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { 
-  Shield, 
-  CheckCircle2, 
-  Clock, 
-  XCircle, 
+import { Card, CardContent, CardHeader, CardTitle, Badge, Button } from '@/components/ui/core';
+import {
+  Shield,
+  CheckCircle2,
+  Clock,
+  XCircle,
   FileText,
   CreditCard,
   Camera,
@@ -111,15 +109,15 @@ export function KYCStatusPanel({ kyc }: KYCStatusPanelProps) {
               const Icon = verificationIcons[verification.type];
               const isDocVerified = verification.status === 'verified';
               const isPending = verification.status === 'pending';
-              
+
               return (
                 <div
                   key={verification.type}
                   className={cn(
                     'flex items-center gap-3 p-3 rounded-lg border transition-all',
-                    isDocVerified 
-                      ? 'bg-success/5 border-success/20' 
-                      : isPending 
+                    isDocVerified
+                      ? 'bg-success/5 border-success/20'
+                      : isPending
                         ? 'bg-warning/5 border-warning/20'
                         : 'bg-destructive/5 border-destructive/20'
                   )}
@@ -157,7 +155,7 @@ export function KYCStatusPanel({ kyc }: KYCStatusPanelProps) {
             <ArrowRight className="h-4 w-4" />
           </Button>
         )}
-        
+
         {isVerified && (
           <p className="text-xs text-muted-foreground text-center">
             Your identity has been verified. No further action required.

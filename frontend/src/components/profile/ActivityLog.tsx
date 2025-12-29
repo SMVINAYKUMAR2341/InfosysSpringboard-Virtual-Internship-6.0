@@ -1,10 +1,9 @@
 import { ActivityLogEntry } from '@/types/profile';
 import { getRelativeTime, formatDateTime } from '@/data/mockProfileData';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { 
-  Activity, 
+import { Card, CardContent, CardHeader, CardTitle, Badge } from '@/components/ui/core';
+import { ScrollArea } from '@/components/ui/layout';
+import {
+  Activity,
   LogIn,
   UserCog,
   Shield,

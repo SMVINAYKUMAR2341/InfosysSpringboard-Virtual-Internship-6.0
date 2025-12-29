@@ -1,8 +1,6 @@
 import { UserProfile } from '@/types/profile';
 import { maskEmail, maskPhone, formatDate } from '@/data/mockProfileData';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Card, CardContent, CardHeader, CardTitle, Badge, Avatar, AvatarFallback } from '@/components/ui/core';
 import { User, Mail, Phone, Calendar, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
 
 interface ProfileOverviewProps {
@@ -83,7 +81,7 @@ export function ProfileOverview({ user }: ProfileOverviewProps) {
         {/* Notice */}
         <div className="mt-6 p-3 rounded-lg bg-primary/5 border border-primary/10">
           <p className="text-xs text-muted-foreground">
-            <span className="text-primary font-medium">Note:</span> Sensitive information is masked for security. 
+            <span className="text-primary font-medium">Note:</span> Sensitive information is masked for security.
             Contact support to update regulated profile details.
           </p>
         </div>

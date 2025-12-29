@@ -176,7 +176,7 @@ class LoanApplicationResponse(BaseModel):
     credit_rating: str  # Excellent, Good, Fair, Poor
     
     # AI Explanation
-    shap_summary: List[Dict[str, str]]
+    shap_summary: List[Dict[str, Any]]
     
     # Next Steps
     next_steps: List[str]
@@ -228,7 +228,7 @@ class ApplicationDetailResponse(BaseModel):
     credit_rating: str
     
     # AI Explanation
-    shap_summary: List[Dict[str, str]]
+    shap_summary: List[Dict[str, Any]]
     model_version: str
     
     # Status
