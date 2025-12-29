@@ -3,11 +3,19 @@ AI Credit Advisor Chatbot - OpenRouter API Version
 Uses cloud-based LLM via OpenRouter - no local model download needed!
 """
 
+import os
 import requests
 from typing import List, Dict, Optional
 
 # OpenRouter API Configuration
-OPENROUTER_API_KEY = "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"
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+if not OPENROUTER_API_KEY:
+    raise ValueError(
+        "OPENROUTER_API_KEY environment variable is not set. "
+        "Please set it in your .env file or environment. "
+        "Get your API key from: https://openrouter.ai/"
+    )
+
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 # System prompt for AI Credit Advisor
