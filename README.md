@@ -24,6 +24,8 @@ This project contains a comprehensive banking system comprising a **Secure Ident
    ```bash
    cp .env.example .env
    ```
+   
+   **Note:** The `.env` file in this repository contains only placeholder values and is safe. Once you add your real credentials, Git will ignore future changes to this file (it's in `.gitignore`).
 
 2. **Generate a secure JWT secret key:**
    ```bash
