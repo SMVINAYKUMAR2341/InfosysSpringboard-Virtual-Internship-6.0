@@ -24,8 +24,22 @@ from .database import get_db
 # CONFIGURATION
 # =============================================================================
 
-# JWT Settings - In production, use environment variables
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-super-secret-key-change-in-production-32chars")
+# JWT Settings - MUST be set in environment variables
+SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+if not SECRET_KEY:
+    raise ValueError(
+        "JWT_SECRET_KEY environment variable is not set. "
+        "Please set it in your .env file with a strong secret key. "
+        "Generate one with: openssl rand -hex 32"
+    )
+
+# Validate SECRET_KEY strength (minimum 32 characters)
+if len(SECRET_KEY) < 32:
+    raise ValueError(
+        "JWT_SECRET_KEY must be at least 32 characters long for security. "
+        "Generate a strong key with: openssl rand -hex 32"
+    )
+
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 1440  # 24 hours - extended for better UX
 

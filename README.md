@@ -16,13 +16,53 @@ This project contains a comprehensive banking system comprising a **Secure Ident
 
 ## Setup Instructions
 
-### 1. Database Setup
-1.  Ensure PostgreSQL is running.
-2.  Create a database named `loan_app_db` (or update `.env` with your preferred name).
-3.  The application is pre-configured to connect to `postgresql+asyncpg://postgres:Padma%40123@localhost/loan_app_db` via the included `.env` file.
-    > **Note**: If your PostgreSQL credentials differ, update the `.env` file in the root directory.
+### 1. Environment Variables Setup (IMPORTANT - Security)
 
-### 2. Backend Setup
+**⚠️ SECURITY FIRST: Configure Environment Variables Before Running**
+
+1. **Copy the environment template:**
+   ```bash
+   cp .env.example .env
+   ```
+
+2. **Generate a secure JWT secret key:**
+   ```bash
+   openssl rand -hex 32
+   ```
+   Copy the output and paste it as your `JWT_SECRET_KEY` in `.env`
+
+3. **Set your database credentials:**
+   - Update `DATABASE_URL` in `.env` with your PostgreSQL password
+   - Replace `YOUR_PASSWORD` with your actual PostgreSQL password
+
+4. **Get OpenRouter API key (for AI chatbot):**
+   - Visit https://openrouter.ai/ and create an account
+   - Get your API key and add it to `OPENROUTER_API_KEY` in `.env`
+
+5. **Verify your .env file:**
+   ```bash
+   # Your .env should look like this (with real values):
+   DATABASE_URL=postgresql+asyncpg://postgres:YourActualPassword@localhost/loan_app_db
+   JWT_SECRET_KEY=a1b2c3d4e5f6...  # 64 character hex string from openssl
+   OPENROUTER_API_KEY=sk-or-v1-...  # Your actual API key
+   ```
+
+**⚠️ Security Warnings:**
+- Never commit `.env` file to Git (it's in .gitignore)
+- Never share your secrets with anyone
+- Use different credentials for development and production
+- Rotate credentials regularly (every 90 days recommended)
+
+### 2. Database Setup
+1.  Ensure PostgreSQL is running.
+2.  Create a database named `loan_app_db`:
+    ```bash
+    psql -U postgres -c "CREATE DATABASE loan_app_db;"
+    ```
+3.  Ensure your `.env` file is properly configured with your database credentials (see Environment Variables Setup above).
+    > **Note**: The application will fail to start if DATABASE_URL is not set correctly.
+
+### 3. Backend Setup
 Navigate to the root directory and install Python dependencies:
 
 ```bash
@@ -43,7 +83,9 @@ uvicorn backend.main:app --reload
 
 The API will be available at `http://localhost:8000`.
 
-### 3. Frontend Setup
+> **Security Note**: The application will fail to start with clear error messages if any required environment variables (DATABASE_URL, JWT_SECRET_KEY, OPENROUTER_API_KEY) are not properly configured.
+
+### 4. Frontend Setup
 Open a new terminal, navigate to the frontend directory:
 
 ```bash
@@ -132,4 +174,52 @@ The frontend will be available at `http://localhost:5173`.
 - Works across all devices
 
 ## Deployment
-This repository is configured to include the `.env` file for ease of setup. **Do not use these credentials in a production environment.**
+**⚠️ SECURITY WARNING FOR PRODUCTION:**
+
+This repository includes a `.env.example` template file. For production deployment:
+
+1. **Never use the example credentials** - generate new, strong secrets
+2. **Never commit `.env` file to Git** - it's in .gitignore for security
+3. **Use environment-specific configurations:**
+   - Different database credentials for dev/staging/production
+   - Rotate JWT secret keys regularly
+   - Use secrets management services (AWS Secrets Manager, Azure Key Vault, etc.)
+4. **Set proper file permissions:**
+   ```bash
+   chmod 600 .env  # Only owner can read/write
+   ```
+5. **Enable security features:**
+   - Use HTTPS in production
+   - Enable CORS restrictions
+   - Implement rate limiting
+   - Enable database connection pooling
+   - Use environment variable injection from your deployment platform
+
+## Security Best Practices
+
+### Environment Variables
+- ✅ All secrets are now stored in environment variables
+- ✅ No hardcoded credentials in source code
+- ✅ `.env` file is gitignored
+- ✅ `.env.example` provides setup template
+- ✅ Strong validation for JWT secret key (minimum 32 characters)
+- ✅ Clear error messages when required variables are missing
+
+### Credentials Management
+- Generate strong, random secrets using `openssl rand -hex 32`
+- Never reuse passwords across environments
+- Rotate credentials every 90 days minimum
+- Use different API keys for development and production
+- Store production secrets in secure vaults (not in .env files on servers)
+
+### What Changed (Security Fix)
+This repository previously contained hardcoded secrets. The following security issues were fixed:
+1. ✅ Removed hardcoded OpenRouter API key from `backend/chatbot_model.py`
+2. ✅ Removed hardcoded database password from `backend/database.py` and `.env`
+3. ✅ Removed weak default JWT secret from `backend/auth.py`
+4. ✅ Added validation to ensure all required environment variables are set
+5. ✅ Added `.env.example` with placeholder values
+6. ✅ Updated `.gitignore` to ensure `.env` is never committed
+7. ✅ Added comprehensive security documentation
+
+**If you're updating from an earlier version:** You must now configure all environment variables in your `.env` file before the application will start.

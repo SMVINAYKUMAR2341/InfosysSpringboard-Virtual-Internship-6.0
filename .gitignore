@@ -1,3 +1,11 @@
+# =============================================================================
+# Security - Environment Variables
+# =============================================================================
+# Never commit sensitive configuration files
+.env
+.env.local
+.env.*.local
+
 # Logs
 logs
 *.log
